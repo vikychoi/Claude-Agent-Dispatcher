@@ -1,4 +1,4 @@
-# Taskshed
+# Claude-Agent-Dispatcher
 
 Dispatch tasks to Claude Code agents running in isolated Docker containers. Submit jobs, watch output in real time, send follow-up prompts, and download results.
 
