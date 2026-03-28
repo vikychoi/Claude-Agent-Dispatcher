@@ -1,0 +1,11 @@
+{
+  "name": "taskshed",
+  "private": true,
+  "scripts": {
+    "build": "pnpm -r build",
+    "dev": "docker compose up"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

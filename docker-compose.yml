@@ -1,0 +1,82 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: taskshed
+      POSTGRES_USER: taskshed
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-taskshed}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U taskshed"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: packages/api/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      DATABASE_URL: postgresql://taskshed:${POSTGRES_PASSWORD:-taskshed}@postgres:5432/taskshed
+      REDIS_URL: redis://redis:6379
+      SECRET_KEY: ${SECRET_KEY}
+      PORT: 3000
+      JOB_DATA_DIR: /data/jobs
+    volumes:
+      - ./data/jobs:/data/jobs
+
+  worker:
+    build:
+      context: .
+      dockerfile: packages/worker/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://taskshed:${POSTGRES_PASSWORD:-taskshed}@postgres:5432/taskshed
+      REDIS_URL: redis://redis:6379
+      SECRET_KEY: ${SECRET_KEY}
+      AGENT_IMAGE_TAG: ${AGENT_IMAGE_TAG:-claude-agent:latest}
+      MAX_CONCURRENT_JOBS: ${MAX_CONCURRENT_JOBS:-3}
+      CONTAINER_MEMORY_LIMIT: ${CONTAINER_MEMORY_LIMIT:-2g}
+      CONTAINER_CPU_QUOTA: ${CONTAINER_CPU_QUOTA:-100000}
+      JOB_DATA_DIR: /data/jobs
+      HOST_JOB_DATA_DIR: ${HOST_JOB_DATA_DIR}
+      DOCKER_GID: ${DOCKER_GID}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./data/jobs:/data/jobs
+
+  web:
+    build:
+      context: .
+      dockerfile: packages/web/Dockerfile
+    depends_on:
+      - api
+    ports:
+      - "5173:80"
+
+volumes:
+  pgdata:

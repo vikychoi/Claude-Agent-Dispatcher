@@ -1,0 +1,7 @@
+node_modules/
+dist/
+data/jobs/
+.env
+*.tsbuildinfo
+CLAUDE.md
+.claude/
