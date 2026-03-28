@@ -21,6 +21,9 @@ export const api = {
   getFileSizeLimit: () => request<{ limitMb: number }>('/settings/file-size-limit'),
   setFileSizeLimit: (limitMb: number) => request<{ limitMb: number }>('/settings/file-size-limit', { method: 'PUT', body: JSON.stringify({ limitMb }) }),
 
+  getArtifactDepthLimit: () => request<{ depth: number }>('/settings/artifact-depth-limit'),
+  setArtifactDepthLimit: (depth: number) => request<{ depth: number }>('/settings/artifact-depth-limit', { method: 'PUT', body: JSON.stringify({ depth }) }),
+
   getSkills: () => request<Array<{ id: string; name: string; description: string; content: string; created_at: string }>>('/skills'),
   getSkill: (id: string) => request<{ id: string; name: string; description: string; content: string }>(`/skills/${id}`),
   createSkill: (body: { name: string; description: string; content: string }) => request('/skills', { method: 'POST', body: JSON.stringify(body) }),

@@ -6,9 +6,11 @@ export function Settings() {
   const queryClient = useQueryClient();
   const { data: auth, isLoading } = useQuery({ queryKey: ['auth'], queryFn: api.getAuthStatus });
   const { data: fileSizeLimit } = useQuery({ queryKey: ['file-size-limit'], queryFn: api.getFileSizeLimit });
+  const { data: artifactDepthLimit } = useQuery({ queryKey: ['artifact-depth-limit'], queryFn: api.getArtifactDepthLimit });
   const [mode, setMode] = useState<'oauth' | 'api_key'>('oauth');
   const [credential, setCredential] = useState('');
   const [limitMb, setLimitMb] = useState<string>('');
+  const [depthLimit, setDepthLimit] = useState<string>('');
 
   const setAuthMutation = useMutation({
     mutationFn: () => {
@@ -33,6 +35,14 @@ export function Settings() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['file-size-limit'] });
       setLimitMb('');
+    },
+  });
+
+  const artifactDepthMutation = useMutation({
+    mutationFn: (depth: number) => api.setArtifactDepthLimit(depth),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['artifact-depth-limit'] });
+      setDepthLimit('');
     },
   });
 
@@ -143,6 +153,37 @@ export function Settings() {
         </div>
         {fileSizeMutation.isError && (
           <div className="text-red-600 text-sm mt-2">{(fileSizeMutation.error as Error).message}</div>
+        )}
+      </div>
+
+      <div className="bg-white rounded-lg border border-gray-200 p-6 mt-6">
+        <h2 className="text-lg font-semibold mb-4">Artifact Depth Limit</h2>
+        <p className="text-sm text-gray-600 mb-3">
+          Maximum directory depth when listing job artifacts. Current limit: <span className="font-medium">{artifactDepthLimit?.depth ?? 1}</span>
+        </p>
+        <div className="flex gap-3 items-center">
+          <input
+            type="number"
+            min={1}
+            max={100}
+            value={depthLimit}
+            onChange={(e) => setDepthLimit(e.target.value)}
+            placeholder={String(artifactDepthLimit?.depth ?? 1)}
+            className="w-32 px-3 py-2 border border-gray-300 rounded-md text-sm"
+          />
+          <button
+            onClick={() => {
+              const val = parseInt(depthLimit, 10);
+              if (val >= 1 && val <= 100) artifactDepthMutation.mutate(val);
+            }}
+            disabled={!depthLimit || artifactDepthMutation.isPending}
+            className="px-4 py-2 bg-gray-900 text-white rounded-md text-sm hover:bg-gray-800 disabled:opacity-50"
+          >
+            {artifactDepthMutation.isPending ? 'Saving...' : 'Update'}
+          </button>
+        </div>
+        {artifactDepthMutation.isError && (
+          <div className="text-red-600 text-sm mt-2">{(artifactDepthMutation.error as Error).message}</div>
         )}
       </div>
     </div>

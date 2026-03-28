@@ -22,7 +22,7 @@ import type {
 } from '@taskshed/shared';
 import { query } from '../db.js';
 import { config } from '../config.js';
-import { DEFAULT_FILE_SIZE_LIMIT_MB } from './settings.js';
+import { DEFAULT_FILE_SIZE_LIMIT_MB, DEFAULT_ARTIFACT_DEPTH_LIMIT } from './settings.js';
 
 export function createJobsRouter(redis: Redis) {
   const router = Router();
@@ -267,7 +267,7 @@ export function createJobsRouter(redis: Redis) {
   const SKIP_DIRS = new Set(['input', 'node_modules', '.git', '.claude', '.npm', '__pycache__']);
   const SKIP_FILES = new Set(['.DS_Store', 'Thumbs.db']);
 
-  function listFilesRecursive(dir: string, base: string): Array<{ path: string; size: number; createdAt: string }> {
+  function listFilesRecursive(dir: string, base: string, maxDepth: number, currentDepth = 0): Array<{ path: string; size: number; createdAt: string }> {
     const results: Array<{ path: string; size: number; createdAt: string }> = [];
     if (!fs.existsSync(dir)) return results;
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -277,18 +277,26 @@ export function createJobsRouter(redis: Redis) {
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {
         if (SKIP_DIRS.has(entry.name)) continue;
-        results.push(...listFilesRecursive(full, rel));
+        if (currentDepth < maxDepth) {
+          results.push(...listFilesRecursive(full, rel, maxDepth, currentDepth + 1));
+        }
       } else {
-        const stat = fs.statSync(full);
-        results.push({ path: rel, size: stat.size, createdAt: stat.birthtime.toISOString() });
+        try {
+          const stat = fs.statSync(full);
+          results.push({ path: rel, size: stat.size, createdAt: stat.birthtime.toISOString() });
+        } catch {
+          // Skip broken symlinks or inaccessible files
+        }
       }
     }
     return results;
   }
 
   router.get('/:id/files', async (req, res) => {
+    const depthResult = await query<{ value: string }>(`SELECT value FROM settings WHERE key = 'artifact_depth_limit'`);
+    const maxDepth = depthResult.rows.length > 0 ? parseInt(depthResult.rows[0].value, 10) : DEFAULT_ARTIFACT_DEPTH_LIMIT;
     const workspaceDir = path.join(config.jobDataDir, req.params['id']!, 'workspace');
-    const files = listFilesRecursive(workspaceDir, '');
+    const files = listFilesRecursive(workspaceDir, '', maxDepth);
     res.json(files);
   });
 

@@ -61,6 +61,7 @@ settingsRouter.delete('/auth', async (_req, res) => {
 });
 
 export const DEFAULT_FILE_SIZE_LIMIT_MB = 50;
+export const DEFAULT_ARTIFACT_DEPTH_LIMIT = 1;
 
 settingsRouter.get('/file-size-limit', async (_req, res) => {
   const result = await query<{ value: string }>(`SELECT value FROM settings WHERE key = 'file_size_limit'`);
@@ -80,4 +81,24 @@ settingsRouter.put('/file-size-limit', async (req, res) => {
     [String(Math.floor(limitMb))]
   );
   res.json({ limitMb: Math.floor(limitMb) });
+});
+
+settingsRouter.get('/artifact-depth-limit', async (_req, res) => {
+  const result = await query<{ value: string }>(`SELECT value FROM settings WHERE key = 'artifact_depth_limit'`);
+  const depth = result.rows.length > 0 ? parseInt(result.rows[0].value, 10) : DEFAULT_ARTIFACT_DEPTH_LIMIT;
+  res.json({ depth });
+});
+
+settingsRouter.put('/artifact-depth-limit', async (req, res) => {
+  const { depth } = req.body as { depth: number };
+  if (typeof depth !== 'number' || depth < 1 || depth > 100) {
+    res.status(400).json({ error: 'Depth must be between 1 and 100', code: 'VALIDATION_ERROR' });
+    return;
+  }
+  await query(
+    `INSERT INTO settings (key, value, updated_at) VALUES ('artifact_depth_limit', $1, NOW())
+     ON CONFLICT (key) DO UPDATE SET value = $1, updated_at = NOW()`,
+    [String(Math.floor(depth))]
+  );
+  res.json({ depth: Math.floor(depth) });
 });
