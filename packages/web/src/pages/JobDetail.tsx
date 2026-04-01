@@ -100,7 +100,11 @@ export function JobDetail() {
 
   const handleTerminate = async () => {
     if (!id || !confirm('Terminate this job?')) return;
-    await api.terminateJob(id);
+    try {
+      await api.terminateJob(id);
+    } catch {
+      // ignore – job may already be stopped
+    }
     window.location.href = '/';
   };
 
