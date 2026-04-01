@@ -39,7 +39,7 @@ export function JobDetail() {
   const [followUpPrompt, setFollowUpPrompt] = useState('');
   const [sending, setSending] = useState(false);
   const [tokens, setTokens] = useState<{ input_tokens: number; output_tokens: number }>({ input_tokens: 0, output_tokens: 0 });
-  const [activity, setActivity] = useState<'working' | 'idle'>('working');
+  const [activity, setActivity] = useState<{ state: 'working' | 'idle'; turn: number }>({ state: 'working', turn: 0 });
   const [costUsd, setCostUsd] = useState(0);
   const logsEndRef = useRef<HTMLDivElement>(null);
   const socketRef = useRef<Socket | null>(null);
@@ -63,8 +63,8 @@ export function JobDetail() {
       setTokens(data);
     });
 
-    socket.on('activity', (data: { state: 'working' | 'idle' }) => {
-      setActivity(data.state);
+    socket.on('activity', (data: { state: 'working' | 'idle'; turn?: number }) => {
+      setActivity({ state: data.state, turn: data.turn ?? 0 });
     });
 
     socket.on('cost', (data: { cost_usd: number }) => {
@@ -91,7 +91,7 @@ export function JobDetail() {
     try {
       await api.sendPrompt(id, followUpPrompt);
       setFollowUpPrompt('');
-      setActivity('working');
+      setActivity(prev => ({ ...prev, state: 'working' }));
     } catch {
       // error silenced
     }
@@ -101,7 +101,7 @@ export function JobDetail() {
   const handleTerminate = async () => {
     if (!id || !confirm('Terminate this job?')) return;
     await api.terminateJob(id);
-    queryClient.invalidateQueries({ queryKey: ['job', id] });
+    window.location.href = '/';
   };
 
   const handleDelete = async () => {
@@ -141,7 +141,7 @@ export function JobDetail() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <h1 className="text-2xl font-bold">Job</h1>
-          {isRunning && activity === 'idle' ? (
+          {isRunning && activity.state === 'idle' ? (
             <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">done</span>
           ) : isRunning ? (
             <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700 animate-pulse">working</span>
@@ -176,6 +176,14 @@ export function JobDetail() {
           {job.claude_config.thinkingEffort && (
             <span className="px-2 py-0.5 bg-gray-100 rounded">thinking: {job.claude_config.thinkingEffort}</span>
           )}
+          {job.claude_config.autoContinueCount > 0 && (
+            <span className="px-2 py-0.5 bg-gray-100 rounded">auto-continue: {job.claude_config.autoContinueCount}x</span>
+          )}
+          {isRunning && job.claude_config.autoContinueCount > 0 && activity.turn > 0 && (
+            <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded font-mono text-xs">
+              turn {activity.turn} / {job.claude_config.autoContinueCount + 1}
+            </span>
+          )}
           {job.job_skills_snapshot.map((s) => (
             <span key={s.name} className="px-2 py-0.5 bg-purple-50 text-purple-700 rounded">{s.name}</span>
           ))}
@@ -188,6 +196,9 @@ export function JobDetail() {
             <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded font-mono text-xs">
               ${costUsd.toFixed(4)}
             </span>
+          )}
+          {job.scheduled_for && (
+            <span className="px-2 py-0.5 bg-orange-50 text-orange-700 rounded">Scheduled: {new Date(job.scheduled_for).toLocaleString()}</span>
           )}
           {job.started_at && <span>Started: {new Date(job.started_at).toLocaleString()}</span>}
           {job.finished_at && <span>Finished: {new Date(job.finished_at).toLocaleString()}</span>}

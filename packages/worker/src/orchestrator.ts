@@ -116,6 +116,11 @@ export async function processJob(jobId: string, redis: Redis): Promise<void> {
     env.push(`CLAUDE_THINKING_EFFORT=${job.claude_config.thinkingEffort}`);
   }
 
+  if (job.claude_config.autoContinueCount) {
+    env.push(`AUTO_CONTINUE_COUNT=${job.claude_config.autoContinueCount}`);
+    env.push(`AUTO_CONTINUE_PROMPT=${job.claude_config.autoContinuePrompt || 'continue'}`);
+  }
+
   const hostWorkspaceBind = `${config.hostJobDataDir}/${jobId}/workspace:/workspace:rw`;
   const hostInputBind = `${config.hostJobDataDir}/${jobId}/input:/workspace/input:ro`;
 
@@ -146,7 +151,7 @@ export async function processJob(jobId: string, redis: Redis): Promise<void> {
       const data = JSON.parse(message);
       if (data.type === 'prompt') {
         redis.set(`job:${jobId}:activity:state`, 'working');
-        redis.publish(`job:${jobId}:activity`, JSON.stringify({ state: 'working' }));
+        redis.publish(`job:${jobId}:activity`, JSON.stringify({ state: 'working', turn: turnCount }));
         const stdinStream = stdinHandles.get(jobId);
         if (stdinStream) {
           stdinStream.write(data.prompt + '\n');
@@ -187,6 +192,7 @@ export async function processJob(jobId: string, redis: Redis): Promise<void> {
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
   let totalCostUsd = 0;
+  let turnCount = 0;
 
   const publishTokens = () => {
     const payload = JSON.stringify({ input_tokens: totalInputTokens, output_tokens: totalOutputTokens });
@@ -227,8 +233,9 @@ export async function processJob(jobId: string, redis: Redis): Promise<void> {
           redis.publish(`job:${jobId}:cost`, JSON.stringify({ cost_usd: totalCostUsd }));
           query('UPDATE jobs SET cost_usd = $2 WHERE id = $1', [jobId, totalCostUsd]).catch(() => {});
         }
+        turnCount++;
         redis.set(`job:${jobId}:activity:state`, 'idle');
-        redis.publish(`job:${jobId}:activity`, JSON.stringify({ state: 'idle' }));
+        redis.publish(`job:${jobId}:activity`, JSON.stringify({ state: 'idle', turn: turnCount }));
       }
     } catch {
       emitLog('stdout', raw);

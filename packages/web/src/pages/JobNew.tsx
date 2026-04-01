@@ -28,18 +28,49 @@ export function JobNew() {
   const [selectedMcp, setSelectedMcp] = useState<Set<string>>(new Set());
   const [model, setModel] = useState('claude-opus-4-6');
   const [thinking, setThinking] = useState<string>('max');
+  const [autoContinueCount, setAutoContinueCount] = useState(0);
+  const [autoContinuePrompt, setAutoContinuePrompt] = useState('continue');
   const [settingsOpen, setSettingsOpen] = useState(true);
   const [files, setFiles] = useState<FileList | null>(null);
+  const [scheduleMode, setScheduleMode] = useState<'now' | 'delay' | 'datetime'>('now');
+  const [delayMinutes, setDelayMinutes] = useState(30);
+  const [scheduledDatetime, setScheduledDatetime] = useState('');
+  const [timezone, setTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone);
 
   const mutation = useMutation({
     mutationFn: () => {
       const claude_config: Record<string, string> = { model, thinkingEffort: thinking };
-      const data = {
+
+      let scheduleFields: Record<string, unknown> = {};
+      if (scheduleMode === 'delay' && delayMinutes > 0) {
+        scheduleFields = { delay_minutes: delayMinutes };
+      } else if (scheduleMode === 'datetime' && scheduledDatetime) {
+        // Convert naive datetime + timezone to UTC ISO string
+        const dtStr = scheduledDatetime; // "YYYY-MM-DDThh:mm"
+        const formatted = new Intl.DateTimeFormat('en-US', {
+          timeZone: timezone,
+          year: 'numeric', month: '2-digit', day: '2-digit',
+          hour: '2-digit', minute: '2-digit', second: '2-digit',
+          hour12: false,
+          timeZoneName: 'longOffset',
+        }).formatToParts(new Date());
+        // Get the UTC offset for the target timezone
+        const offsetPart = formatted.find(p => p.type === 'timeZoneName')?.value || '';
+        // offsetPart is like "GMT+05:30" or "GMT-04:00"
+        const offset = offsetPart.replace('GMT', '') || '+00:00';
+        const isoWithTz = `${dtStr}:00${offset}`;
+        scheduleFields = { scheduled_for: new Date(isoWithTz).toISOString() };
+      }
+
+      const data: Record<string, unknown> = {
         prompt,
         claude_md: claudeMd,
         skill_ids: Array.from(selectedSkills),
         mcp_server_ids: Array.from(selectedMcp),
         claude_config,
+        ...(autoContinueCount > 0 && { auto_continue_count: autoContinueCount }),
+        ...(autoContinueCount > 0 && autoContinuePrompt && { auto_continue_prompt: autoContinuePrompt }),
+        ...scheduleFields,
       };
       if (files && files.length > 0) {
         const formData = new FormData();
@@ -69,6 +100,7 @@ export function JobNew() {
   const settingsSummary = [
     model !== 'claude-opus-4-6' ? model : null,
     thinking !== 'max' ? `thinking: ${thinking}` : null,
+    autoContinueCount > 0 ? `auto-continue: ${autoContinueCount}x` : null,
   ].filter(Boolean).join(' · ');
 
   return (
@@ -200,6 +232,89 @@ export function JobNew() {
                   ))}
                 </div>
               </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Auto-Continue</label>
+                <p className="text-xs text-gray-500 mb-2">Automatically send a follow-up prompt N times after the agent completes each turn.</p>
+                <div className="flex gap-3 items-start">
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Count</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={50}
+                      value={autoContinueCount}
+                      onChange={(e) => setAutoContinueCount(Math.max(0, Math.min(50, parseInt(e.target.value, 10) || 0)))}
+                      className="w-20 px-3 py-2 border border-gray-300 rounded-md text-sm"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <label className="block text-xs text-gray-500 mb-1">Prompt</label>
+                    <input
+                      type="text"
+                      value={autoContinuePrompt}
+                      onChange={(e) => setAutoContinuePrompt(e.target.value)}
+                      disabled={autoContinueCount === 0}
+                      placeholder="continue"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm disabled:opacity-50"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-4">
+          <h2 className="text-sm font-medium">Schedule</h2>
+          <div className="flex gap-4">
+            {(['now', 'delay', 'datetime'] as const).map((mode) => (
+              <label key={mode} className="flex items-center gap-2">
+                <input type="radio" checked={scheduleMode === mode} onChange={() => setScheduleMode(mode)} />
+                <span className="text-sm">
+                  {mode === 'now' ? 'Run now' : mode === 'delay' ? 'Run in...' : 'Run at...'}
+                </span>
+              </label>
+            ))}
+          </div>
+
+          {scheduleMode === 'delay' && (
+            <div className="flex gap-3 items-center">
+              <input
+                type="number"
+                min={1}
+                max={10080}
+                value={delayMinutes}
+                onChange={(e) => setDelayMinutes(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                className="w-24 px-3 py-2 border border-gray-300 rounded-md text-sm"
+              />
+              <span className="text-sm text-gray-500">minutes from now</span>
+            </div>
+          )}
+
+          {scheduleMode === 'datetime' && (
+            <div className="flex gap-3 items-start flex-wrap">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Date & Time</label>
+                <input
+                  type="datetime-local"
+                  value={scheduledDatetime}
+                  onChange={(e) => setScheduledDatetime(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-md text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Timezone</label>
+                <select
+                  value={timezone}
+                  onChange={(e) => setTimezone(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-md text-sm max-w-xs"
+                >
+                  {Intl.supportedValuesOf('timeZone').map((tz) => (
+                    <option key={tz} value={tz}>{tz.replace(/_/g, ' ')}</option>
+                  ))}
+                </select>
+              </div>
             </div>
           )}
         </div>
@@ -210,7 +325,7 @@ export function JobNew() {
             disabled={!prompt || mutation.isPending}
             className="px-6 py-2 bg-gray-900 text-white rounded-md text-sm hover:bg-gray-800 disabled:opacity-50"
           >
-            {mutation.isPending ? 'Submitting...' : 'Submit Job'}
+            {mutation.isPending ? 'Submitting...' : scheduleMode === 'now' ? 'Submit Job' : 'Schedule Job'}
           </button>
           <button onClick={() => navigate('/')} className="px-4 py-2 border border-gray-300 rounded-md text-sm">
             Cancel

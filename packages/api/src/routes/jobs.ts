@@ -50,9 +50,27 @@ export function createJobsRouter(redis: Redis) {
       return;
     }
 
-    const configToStore = claudeConfig.thinkingEffort
-      ? { model: claudeConfig.model, thinkingEffort: claudeConfig.thinkingEffort }
-      : { model: claudeConfig.model };
+    const autoContinueCount = typeof body.auto_continue_count === 'number' && body.auto_continue_count >= 1 && body.auto_continue_count <= 50
+      ? Math.floor(body.auto_continue_count) : undefined;
+    const autoContinuePrompt = autoContinueCount && typeof body.auto_continue_prompt === 'string' && body.auto_continue_prompt.trim()
+      ? body.auto_continue_prompt.trim() : undefined;
+
+    const configToStore: Record<string, unknown> = { model: claudeConfig.model };
+    if (claudeConfig.thinkingEffort) configToStore.thinkingEffort = claudeConfig.thinkingEffort;
+    if (autoContinueCount) configToStore.autoContinueCount = autoContinueCount;
+    if (autoContinuePrompt) configToStore.autoContinuePrompt = autoContinuePrompt;
+
+    let scheduledFor: string | null = null;
+    if (body.scheduled_for) {
+      const parsed = new Date(body.scheduled_for);
+      if (isNaN(parsed.getTime())) {
+        res.status(400).json({ error: 'Invalid scheduled_for date', code: 'VALIDATION_ERROR' });
+        return;
+      }
+      scheduledFor = parsed.toISOString();
+    } else if (typeof body.delay_minutes === 'number' && body.delay_minutes > 0) {
+      scheduledFor = new Date(Date.now() + Math.floor(body.delay_minutes) * 60000).toISOString();
+    }
 
     let skillsSnapshot: Array<{ id: string; name: string; content: string }> = [];
     if (body.skill_ids?.length) {
@@ -96,14 +114,15 @@ export function createJobsRouter(redis: Redis) {
       : '';
 
     const result = await query<Job>(
-      `INSERT INTO jobs (prompt, claude_md, claude_config, job_skills_snapshot, job_mcp_snapshot)
-       VALUES ($1, $2, $3::jsonb, $4::jsonb, $5) RETURNING *`,
+      `INSERT INTO jobs (prompt, claude_md, claude_config, job_skills_snapshot, job_mcp_snapshot, scheduled_for)
+       VALUES ($1, $2, $3::jsonb, $4::jsonb, $5, $6) RETURNING *`,
       [
         body.prompt,
         body.claude_md || '',
         JSON.stringify(configToStore),
         JSON.stringify(skillsSnapshot),
         mcpSnapshotToStore,
+        scheduledFor,
       ]
     );
 
@@ -127,7 +146,8 @@ export function createJobsRouter(redis: Redis) {
       }
     }
 
-    await jobQueue.add('process-job', { jobId: job.id });
+    const delay = scheduledFor ? Math.max(0, new Date(scheduledFor).getTime() - Date.now()) : 0;
+    await jobQueue.add('process-job', { jobId: job.id }, delay > 0 ? { delay } : {});
     res.status(201).json(job);
   });
 

@@ -39,9 +39,9 @@ export const api = {
   testMcpServerById: (id: string) => request<{ success: boolean; serverInfo?: { name: string; version: string }; tools?: Array<{ name: string; description?: string }>; error?: string; authRequired?: boolean; authServerUrl?: string; registrationEndpoint?: string }>(`/mcp-servers/${id}/test`, { method: 'POST' }),
   startMcpAuth: (id: string) => request<{ authorization_url: string }>(`/mcp-servers/${id}/auth/start`, { method: 'POST' }),
 
-  getJobs: () => request<Array<{ id: string; status: string; prompt: string; claude_config: { model: string; thinkingEffort?: string }; input_tokens: number; output_tokens: number; cost_usd: number; created_at: string; started_at?: string; finished_at?: string }>>('/jobs'),
+  getJobs: () => request<Array<{ id: string; status: string; prompt: string; claude_config: { model: string; thinkingEffort?: string }; input_tokens: number; output_tokens: number; cost_usd: number; scheduled_for?: string; created_at: string; started_at?: string; finished_at?: string }>>('/jobs'),
   getJobActivities: () => request<Record<string, string>>('/jobs/activity'),
-  getJob: (id: string) => request<{ id: string; status: string; prompt: string; claude_md: string; claude_config: { model: string; thinkingEffort?: string }; job_skills_snapshot: Array<{ name: string }>; job_mcp_snapshot: unknown[]; input_tokens: number; output_tokens: number; cost_usd: number; error?: string; created_at: string; started_at?: string; finished_at?: string }>(`/jobs/${id}`),
+  getJob: (id: string) => request<{ id: string; status: string; prompt: string; claude_md: string; claude_config: { model: string; thinkingEffort?: string; autoContinuePrompt?: string; autoContinueCount?: number }; job_skills_snapshot: Array<{ name: string }>; job_mcp_snapshot: unknown[]; input_tokens: number; output_tokens: number; cost_usd: number; error?: string; scheduled_for?: string; created_at: string; started_at?: string; finished_at?: string }>(`/jobs/${id}`),
   createJob: (body: Record<string, unknown>) => request<{ id: string }>('/jobs', { method: 'POST', body: JSON.stringify(body) }),
   createJobMultipart: async (formData: FormData): Promise<{ id: string }> => {
     const res = await fetch('/api/jobs', { method: 'POST', body: formData });

@@ -7,6 +7,8 @@ export type ThinkingEffort = 'low' | 'medium' | 'high' | 'max';
 export interface ClaudeConfig {
   model?: string;
   thinkingEffort?: ThinkingEffort;
+  autoContinuePrompt?: string;
+  autoContinueCount?: number;
 }
 
 export interface AuthConfig {
@@ -78,6 +80,7 @@ export interface Job {
   output_tokens: number;
   cost_usd: number;
   error?: string;
+  scheduled_for?: string;
   created_at: string;
   started_at?: string;
   finished_at?: string;
@@ -128,6 +131,10 @@ export interface CreateJobRequest {
   skill_ids: string[];
   mcp_server_ids: string[];
   claude_config?: ClaudeConfig;
+  auto_continue_prompt?: string;
+  auto_continue_count?: number;
+  scheduled_for?: string;
+  delay_minutes?: number;
 }
 
 export interface CreateSkillRequest {

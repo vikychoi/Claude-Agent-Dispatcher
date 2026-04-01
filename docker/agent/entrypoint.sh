@@ -66,6 +66,13 @@ cd /workspace
 # doesn't consume the container's stdin (needed for follow-ups).
 $CMD "${INITIAL_PROMPT}${ATTACHED_FILES}" </dev/null
 
+# Auto-continue loop: send follow-up prompt N times automatically.
+if [ "${AUTO_CONTINUE_COUNT:-0}" -gt 0 ]; then
+  for i in $(seq 1 "$AUTO_CONTINUE_COUNT"); do
+    $CMD --continue "${AUTO_CONTINUE_PROMPT:-continue}" </dev/null
+  done
+fi
+
 # Wait for follow-up prompts via container stdin.
 # Each line is run as a continuation of the same conversation.
 # read blocks until data arrives, keeping the container alive.

@@ -80,6 +80,8 @@ export function JobList() {
                 <div className="flex items-center gap-3">
                   {job.status === 'running' && activities?.[job.id] === 'idle' ? (
                     <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">done</span>
+                  ) : job.status === 'queued' && job.scheduled_for && new Date(job.scheduled_for) > new Date() ? (
+                    <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700">scheduled</span>
                   ) : (
                     <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[job.status] || ''}`}>
                       {job.status}
@@ -113,7 +115,12 @@ export function JobList() {
                 </div>
               </div>
               <p className="text-sm text-gray-700 truncate">{job.prompt}</p>
-              <p className="text-xs text-gray-400 mt-1">{new Date(job.created_at).toLocaleString()}</p>
+              <p className="text-xs text-gray-400 mt-1">
+                {job.scheduled_for && job.status === 'queued'
+                  ? `Scheduled: ${new Date(job.scheduled_for).toLocaleString()}`
+                  : new Date(job.created_at).toLocaleString()
+                }
+              </p>
             </Link>
           ))}
         </div>
